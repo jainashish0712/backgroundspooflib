@@ -1,0 +1,17 @@
+# Build products
+*.dylib
+*.o
+*.a
+.theos/
+packages/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# OS & Editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*.log

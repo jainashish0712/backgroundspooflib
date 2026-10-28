@@ -1,0 +1,50 @@
+name: Build InstagramKeepAlive Dylib
+
+on:
+  push:
+    branches: [ main, master, dev, "**" ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Unit Tests
+        run: |
+          python3 test_keepalive.py
+
+      - name: Compile InstagramKeepAlive.dylib
+        run: |
+          chmod +x build.sh
+          ./build.sh
+          ls -lh InstagramKeepAlive.dylib
+          file InstagramKeepAlive.dylib
+
+      - name: Publish Direct Raw Dylib (Rolling 'latest' Release - No Zip)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f latest HEAD
+          git push origin -f tag latest
+          gh release delete latest --yes || true
+          gh release create latest InstagramKeepAlive.dylib \
+            --title "Latest Development Build" \
+            --notes "Continuous build of InstagramKeepAlive.dylib (raw uncompressed binary for LiveContainer, TrollStore, and Sideloading)."
+
+      - name: Upload Dylib Artifact (Fallback)
+        uses: actions/upload-artifact@v4
+        with:
+          name: InstagramKeepAlive.dylib
+          path: InstagramKeepAlive.dylib
