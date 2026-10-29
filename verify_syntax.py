@@ -80,8 +80,6 @@ def verify_targeted_selectors():
         code = f.read()
 
     expected_selectors = [
-        "ios_purge_26_q2_IGHomeSundialFeedStoriesManager_handleAppDidEnterBackground",
-        "handleAppDidEnterBackground",
         "clearMemoryCache:",
         "shouldRefreshFeedOnHotStart",
         "warmStartRefreshInterval",

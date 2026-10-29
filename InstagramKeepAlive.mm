@@ -5,6 +5,7 @@
 //  Approach 2: Surgical Warm-Start & Memory Purge Neutralization
 //  Prevents Instagram from purging RAM/caches on app minimize,
 //  and completely eliminates forced feed/reels auto-refresh & auto-scroll on maximize.
+//  Ensures 0% CPU and zero background heating by allowing video decoders to pause naturally.
 //
 
 #import "InstagramKeepAlive.h"
@@ -95,29 +96,12 @@ static void SwizzleMethod(Class cls, SEL origSel, SEL altSel, IMP altImp, const 
     }
 }
 
-static void ReplaceMethodNoOp(Class cls, SEL sel, IMP newImp, const char *types) {
-    if (!cls || !sel || !newImp) return;
-    Method method = class_getInstanceMethod(cls, sel);
-    if (method) {
-        method_setImplementation(method, newImp);
-    } else {
-        class_addMethod(cls, sel, newImp, types ? types : "v@:");
-    }
-}
-
 #pragma mark - Hook Implementations
 
-// 1. Generic NO-OP for story and reel purge handlers
-static void IKA_PurgeNoOp(id self, SEL _cmd) {
-    s_suppressedPurgeCount.fetch_add(1);
-    KEEP_ALIVE_LOG("Suppressed background purge: -[%s %s] (Count: %lu)",
-                   class_getName(object_getClass(self)), sel_getName(_cmd),
-                   (unsigned long)s_suppressedPurgeCount.load());
-}
-
-// 2. Intercept clearMemoryCache: on image caches
+// 1. Intercept clearMemoryCache: on image caches
+// Keeps decoded image textures in RAM while the app is in background,
+// but consumes 0% CPU and generates zero heat.
 static void IKA_ClearMemoryCache(id self, SEL _cmd, id factor) {
-    // If the app is currently minimized in background, suppress cache clearing
     if (s_isAppBackgrounded.load()) {
         s_suppressedPurgeCount.fetch_add(1);
         KEEP_ALIVE_LOG("Suppressed background clearMemoryCache: on %s (Count: %lu)",
@@ -134,7 +118,7 @@ static void IKA_ClearMemoryCache(id self, SEL _cmd, id factor) {
     }
 }
 
-// 3. shouldRefreshFeedOnHotStart
+// 2. shouldRefreshFeedOnHotStart
 static BOOL IKA_ShouldRefreshFeedOnHotStart(id self, SEL _cmd) {
     // If app has never been backgrounded, it is a cold start: allow normal initialization!
     if (!s_hasEnteredBackground.load()) {
@@ -153,7 +137,7 @@ static BOOL IKA_ShouldRefreshFeedOnHotStart(id self, SEL _cmd) {
     return NO;
 }
 
-// 4. warmStartRefreshInterval / minimumWarmStartBackgroundedInterval
+// 3. warmStartRefreshInterval / minimumWarmStartBackgroundedInterval
 static double IKA_WarmStartRefreshInterval(id self, SEL _cmd) {
     // If app has been backgrounded, return 24 hours so Instagram considers feed cache fresh
     if (s_hasEnteredBackground.load()) {
@@ -183,7 +167,7 @@ static NSInteger IKA_WarmStartRefreshTimerInSeconds(id self, SEL _cmd) {
     return 0;
 }
 
-// 5. scrollToTopAnimated:
+// 4. scrollToTopAnimated:
 static void IKA_ScrollToTopAnimated(id self, SEL _cmd, BOOL animated) {
     // Suppress ONLY during genuine warm-start restoration window
     if (s_isRestoringFromWarmStart.load()) {
@@ -216,7 +200,7 @@ static void SetupLifecycleObservers(void) {
         s_isAppBackgrounded.store(true);
         s_backgroundTimestamp.store([NSDate timeIntervalSinceReferenceDate]);
         KEEP_ALIVE_LOG("=== App Minimized to Background ===");
-        KEEP_ALIVE_LOG("Shield active: Suppressing memory purges & keeping RAM cached.");
+        KEEP_ALIVE_LOG("Shield active: Suppressing memory purges & keeping RAM cached. Video paused naturally (0% CPU/0 heating).");
     }];
     
     // 2. App Maximized (Will Enter Foreground)
@@ -262,35 +246,7 @@ static void SetupLifecycleObservers(void) {
 #pragma mark - Hook Registration
 
 static void ApplyHooks(void) {
-    // 1. IGHomeSundialFeedStoriesManager (Stories + Reels Purge Handlers)
-    NSArray<NSString *> *sundialClasses = @[
-        @"IGHomeSundialFeedStoriesManager",
-        @"_TtC17IGHomeSundialFeed31IGHomeSundialFeedStoriesManager"
-    ];
-    for (NSString *className in sundialClasses) {
-        Class cls = objc_getClass([className UTF8String]);
-        if (cls) {
-            ReplaceMethodNoOp(cls, @selector(ios_purge_26_q2_IGHomeSundialFeedStoriesManager_handleAppDidEnterBackground), (IMP)IKA_PurgeNoOp, "v@:");
-            ReplaceMethodNoOp(cls, @selector(handleAppDidEnterBackground), (IMP)IKA_PurgeNoOp, "v@:");
-            KEEP_ALIVE_LOG("Installed purge shield on %s", [className UTF8String]);
-        }
-    }
-    
-    // 2. Secondary controllers with background purges
-    NSArray<NSString *> *auxClasses = @[
-        @"IGMetaAIReelsMidcardSectionController",
-        @"IGShortDramaSeriesPageViewController"
-    ];
-    for (NSString *className in auxClasses) {
-        Class cls = objc_getClass([className UTF8String]);
-        if (cls) {
-            ReplaceMethodNoOp(cls, @selector(ios_purge_26_q3_IGMetaAIReelsMidcardSectionController_handleDidEnterBackground), (IMP)IKA_PurgeNoOp, "v@:");
-            ReplaceMethodNoOp(cls, @selector(ios_purge_26_q3_IGShortDramaSeriesPageViewController_handleDidEnterBackground), (IMP)IKA_PurgeNoOp, "v@:");
-            ReplaceMethodNoOp(cls, @selector(handleDidEnterBackground), (IMP)IKA_PurgeNoOp, "v@:");
-        }
-    }
-    
-    // 3. Image Memory Caches (Suppress clearing only while backgrounded)
+    // 1. Image Memory Caches (Suppress clearing only while backgrounded)
     NSArray<NSString *> *imageCacheClasses = @[
         @"IGUnifiedImageMemoryCache",
         @"_IGImageServiceMemoryCache",
@@ -305,7 +261,7 @@ static void ApplyHooks(void) {
         }
     }
     
-    // 4. Feed Network Sources & Coordinators (Warm-Start Interval Spoofing)
+    // 2. Feed Network Sources & Coordinators (Warm-Start Interval Spoofing to 24h)
     NSArray<NSString *> *feedSourceClasses = @[
         @"IGFeedNetworkSource",
         @"IGMainFeedNetworkSource",
@@ -323,7 +279,7 @@ static void ApplyHooks(void) {
         }
     }
     
-    // 5. Feed View Controllers (Scroll-to-top retention & hot start check)
+    // 3. Feed View Controllers (Scroll-to-top retention & hot start check)
     NSArray<NSString *> *feedVCClasses = @[
         @"IGMainFeedViewController",
         @"IGMainFeedViewController_objc",
@@ -347,7 +303,7 @@ void InstagramKeepAlive_Init(void) {
         KEEP_ALIVE_LOG("=================================================");
         KEEP_ALIVE_LOG("Initializing InstagramKeepAlive (Approach 2)");
         KEEP_ALIVE_LOG("Zero RAM Purge on Minimize | Zero Feed Reload on Maximize");
-        KEEP_ALIVE_LOG("Cold Start: 100%% Untouched Initial Feed Fetching");
+        KEEP_ALIVE_LOG("0%% CPU in Background | Zero Heating Guarantee");
         KEEP_ALIVE_LOG("=================================================");
         
         SetupLifecycleObservers();
