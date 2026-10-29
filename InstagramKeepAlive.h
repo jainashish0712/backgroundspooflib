@@ -26,6 +26,9 @@ BOOL InstagramKeepAlive_IsActive(void);
 /// Returns YES if Instagram is currently in the background state.
 BOOL InstagramKeepAlive_IsBackgrounded(void);
 
+/// Returns YES if Instagram has ever entered the background since cold launch.
+BOOL InstagramKeepAlive_HasEnteredBackground(void);
+
 /// Returns YES if Instagram is currently in the warm-start restoration window.
 BOOL InstagramKeepAlive_IsRestoringFromWarmStart(void);
 

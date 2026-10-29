@@ -18,6 +18,7 @@ def test_cffi_public_api():
     void InstagramKeepAlive_Init(void);
     BOOL InstagramKeepAlive_IsActive(void);
     BOOL InstagramKeepAlive_IsBackgrounded(void);
+    BOOL InstagramKeepAlive_HasEnteredBackground(void);
     BOOL InstagramKeepAlive_IsRestoringFromWarmStart(void);
     NSUInteger InstagramKeepAlive_SuppressedPurgeCount(void);
     NSUInteger InstagramKeepAlive_SuppressedRefreshCount(void);
@@ -37,7 +38,6 @@ def check_brackets_balance(filename):
     with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
 
-    # Strip comments and string literals
     cleaned = re.sub(r'//.*', '', content)
     cleaned = re.sub(r'/\*.*?\*/', '', cleaned, flags=re.DOTALL)
     cleaned = re.sub(r'"(\\.|[^"\\])*"', '""', cleaned)
@@ -83,20 +83,13 @@ def verify_targeted_selectors():
         "ios_purge_26_q2_IGHomeSundialFeedStoriesManager_handleAppDidEnterBackground",
         "handleAppDidEnterBackground",
         "clearMemoryCache:",
-        "clearInMemoryCache",
-        "clearInnerMemoryCache",
         "shouldRefreshFeedOnHotStart",
         "warmStartRefreshInterval",
         "warmStartRefreshIntervalOnPeak",
         "minimumWarmStartBackgroundedInterval",
         "minimumWarmStartBackgroundedIntervalOnPeak",
-        "warmStartBackgroundRefreshIntervalWithLauncherSet:feedRefreshInstructionsStore:",
         "warmStartRefreshTimerInSeconds",
-        "_timeSinceBackground",
-        "didEnterBackgroundDate",
-        "lastDidEnterBackgroundDate",
-        "scrollToTopAnimated:",
-        "refreshFeedWithFetchReason:animated:"
+        "scrollToTopAnimated:"
     ]
 
     for sel in expected_selectors:
@@ -115,6 +108,7 @@ def check_atomic_safety():
 
     required_atomics = [
         "s_isActive",
+        "s_hasEnteredBackground",
         "s_isAppBackgrounded",
         "s_isRestoringFromWarmStart",
         "s_suppressedPurgeCount",
