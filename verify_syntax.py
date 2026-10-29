@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Syntax, AST, and Structural Verification Suite for InstagramKeepAlive
+Root-Level Architecture
 """
 
 import sys
@@ -18,12 +19,9 @@ def test_cffi_public_api():
     void InstagramKeepAlive_Init(void);
     BOOL InstagramKeepAlive_IsActive(void);
     BOOL InstagramKeepAlive_IsBackgrounded(void);
-    BOOL InstagramKeepAlive_HasEnteredBackground(void);
-    BOOL InstagramKeepAlive_IsRestoringFromWarmStart(void);
-    NSUInteger InstagramKeepAlive_SuppressedPurgeCount(void);
-    NSUInteger InstagramKeepAlive_SuppressedRefreshCount(void);
+    NSUInteger InstagramKeepAlive_FilteredNotificationCount(void);
+    NSUInteger InstagramKeepAlive_ConfiguredFeedSourceCount(void);
     NSUInteger InstagramKeepAlive_SuppressedScrollCount(void);
-    NSUInteger InstagramKeepAlive_SpoofedTimerCount(void);
     """
     try:
         ffi.cdef(c_decl)
@@ -74,19 +72,16 @@ def check_brackets_balance(filename):
     return True
 
 def verify_targeted_selectors():
-    print("[3/4] Verifying targeted selector strings against Instagram Mach-O symbol table...")
+    print("[3/4] Verifying root-level targeted selectors in InstagramKeepAlive.mm...")
     mm_file = os.path.join(os.path.dirname(__file__), "InstagramKeepAlive.mm")
     with open(mm_file, 'r', encoding='utf-8') as f:
         code = f.read()
 
     expected_selectors = [
-        "clearMemoryCache:",
+        "addObserver:selector:name:object:",
+        "disableAutomaticRefresh",
+        "setDisableAutomaticRefresh:",
         "shouldRefreshFeedOnHotStart",
-        "warmStartRefreshInterval",
-        "warmStartRefreshIntervalOnPeak",
-        "minimumWarmStartBackgroundedInterval",
-        "minimumWarmStartBackgroundedIntervalOnPeak",
-        "warmStartRefreshTimerInSeconds",
         "scrollToTopAnimated:"
     ]
 
@@ -109,10 +104,9 @@ def check_atomic_safety():
         "s_hasEnteredBackground",
         "s_isAppBackgrounded",
         "s_isRestoringFromWarmStart",
-        "s_suppressedPurgeCount",
-        "s_suppressedRefreshCount",
-        "s_suppressedScrollCount",
-        "s_spoofedTimerCount"
+        "s_filteredNotificationCount",
+        "s_configuredFeedSourceCount",
+        "s_suppressedScrollCount"
     ]
 
     for var in required_atomics:
@@ -125,7 +119,7 @@ def check_atomic_safety():
 
 def main():
     print("=" * 60)
-    print("InstagramKeepAlive Syntax & Structural Verification Suite")
+    print("InstagramKeepAlive Root Architecture Verification Suite")
     print("=" * 60)
 
     dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -147,7 +141,7 @@ def main():
     if not check_atomic_safety():
         sys.exit(1)
 
-    print("\n>>> ALL SYNTAX AND STRUCTURAL AUDITS PASSED 100% <<<")
+    print("\n>>> ALL ROOT ARCHITECTURE AUDITS PASSED 100% <<<")
 
 if __name__ == "__main__":
     main()

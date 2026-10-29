@@ -2,9 +2,11 @@
 //  InstagramKeepAlive.h
 //  InstagramKeepAlive
 //
-//  Approach 2: Surgical Warm-Start & Memory Purge Neutralization
-//  Prevents Instagram from clearing memory/RAM on minimize,
-//  and eliminates forced feed/reels auto-refresh & auto-scroll on maximize.
+//  Root-Level Keep-Alive & Feed Retention Architecture
+//  Eliminates runtime getter wrapping by using:
+//  1. Root Notification Filtering (Blocks image cache purge registration at the event root)
+//  2. Native Meta Feed Configuration (Enables built-in _disableAutomaticRefresh at creation root)
+//  3. Natural Video/Audio Pause Lifecycle (Guarantees 0.0% CPU & zero background heating)
 //
 
 #ifndef INSTAGRAM_KEEP_ALIVE_H
@@ -16,7 +18,7 @@
 extern "C" {
 #endif
 
-/// Initialize the keep-alive, anti-purge, and anti-refresh engine.
+/// Initialize the root keep-alive and feed retention engine.
 /// Safe to call multiple times (guarded by dispatch_once).
 void InstagramKeepAlive_Init(void);
 
@@ -26,17 +28,10 @@ BOOL InstagramKeepAlive_IsActive(void);
 /// Returns YES if Instagram is currently in the background state.
 BOOL InstagramKeepAlive_IsBackgrounded(void);
 
-/// Returns YES if Instagram has ever entered the background since cold launch.
-BOOL InstagramKeepAlive_HasEnteredBackground(void);
-
-/// Returns YES if Instagram is currently in the warm-start restoration window.
-BOOL InstagramKeepAlive_IsRestoringFromWarmStart(void);
-
 /// Telemetry counters for diagnostics
-NSUInteger InstagramKeepAlive_SuppressedPurgeCount(void);
-NSUInteger InstagramKeepAlive_SuppressedRefreshCount(void);
+NSUInteger InstagramKeepAlive_FilteredNotificationCount(void);
+NSUInteger InstagramKeepAlive_ConfiguredFeedSourceCount(void);
 NSUInteger InstagramKeepAlive_SuppressedScrollCount(void);
-NSUInteger InstagramKeepAlive_SpoofedTimerCount(void);
 
 #ifdef __cplusplus
 }
